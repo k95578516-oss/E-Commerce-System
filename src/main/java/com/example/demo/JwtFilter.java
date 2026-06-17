@@ -28,65 +28,58 @@ public class JwtFilter extends OncePerRequestFilter {
     protected void doFilterInternal(
             HttpServletRequest request,
             HttpServletResponse response,
-            FilterChain filterChain)
-            throws ServletException, IOException {
+            FilterChain filterChain
+    ) throws ServletException, IOException {
 
-        String authHeader =
-                request.getHeader("Authorization");
+        String path = request.getRequestURI();
+
+        // ✅ STEP 1: SKIP SWAGGER + AUTH PATHS FIRST
+        if (
+                path.startsWith("/swagger-ui") ||
+                        path.startsWith("/v3/api-docs") ||
+                        path.startsWith("/auth")
+        ) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        // STEP 2: JWT PROCESSING
+        String authHeader = request.getHeader("Authorization");
 
         String username = null;
         String role = null;
         String token = null;
 
-        if (authHeader != null &&
-                authHeader.startsWith("Bearer ")) {
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
 
             token = authHeader.substring(7);
 
             try {
-
-                username =
-                        jwtService.extractUsername(token);
-
-                role =
-                        jwtService.extractRole(token);
-
+                username = jwtService.extractUsername(token);
+                role = jwtService.extractRole(token);
             } catch (Exception e) {
 
-                response.setStatus(
-                        HttpServletResponse.SC_UNAUTHORIZED);
-
-                response.getWriter()
-                        .write("Invalid JWT Token");
-
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                response.getWriter().write("Invalid JWT Token");
                 return;
             }
         }
 
+        // STEP 3: SET AUTH CONTEXT
         if (username != null &&
-                SecurityContextHolder
-                        .getContext()
-                        .getAuthentication() == null) {
+                SecurityContextHolder.getContext().getAuthentication() == null) {
 
             UsernamePasswordAuthenticationToken auth =
                     new UsernamePasswordAuthenticationToken(
-
                             username,
-
                             null,
-
-                            List.of(
-                                    new SimpleGrantedAuthority(
-                                            "ROLE_" + role
-                                    )
-                            )
+                            List.of(new SimpleGrantedAuthority("ROLE_" + role))
                     );
 
-            SecurityContextHolder
-                    .getContext()
-                    .setAuthentication(auth);
+            SecurityContextHolder.getContext().setAuthentication(auth);
         }
 
+        // STEP 4: CONTINUE FILTER CHAIN (ONLY ONCE)
         filterChain.doFilter(request, response);
     }
-}
+    }
