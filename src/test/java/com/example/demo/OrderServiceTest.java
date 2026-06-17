@@ -1,5 +1,5 @@
 package com.example.demo;
-import com.example.demo.Exception.ResourceNotFoundException;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
@@ -20,6 +20,12 @@ public class OrderServiceTest {
 
     @Mock
     private OrderRepository orderRepository;
+
+    @Mock
+    private OrderItemRepository orderItemRepository;
+
+    @Mock
+    private ProductRepository productRepository;
 
     @Mock
     private CartRepository cartRepository;
@@ -43,6 +49,7 @@ public class OrderServiceTest {
         Product product = new Product();
         product.setId(1);
         product.setPrice(50000);
+        product.setStock(10);
 
         CartItem cartItem = new CartItem();
         cartItem.setProduct(product);
@@ -53,6 +60,9 @@ public class OrderServiceTest {
 
         when(cartItemRepository.findByCartId(1))
                 .thenReturn(List.of(cartItem));
+
+        when(productRepository.save(any(Product.class)))
+                .thenReturn(product);
 
         when(orderRepository.save(any(Order.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));

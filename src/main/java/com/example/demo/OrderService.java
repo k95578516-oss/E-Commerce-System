@@ -3,6 +3,7 @@ package com.example.demo;
 import com.example.demo.Exception.ResourceNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -26,7 +27,7 @@ public class OrderService {
     @Autowired
     private ProductRepository productRepository;
 
-    // ================= CHECKOUT =================
+    @Transactional
     public OrderDTO placeOrder(int userId) {
 
         Cart cart = cartRepository.findByUserId(userId)
