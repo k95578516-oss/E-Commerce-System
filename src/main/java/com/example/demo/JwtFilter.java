@@ -35,7 +35,9 @@ public class JwtFilter extends OncePerRequestFilter {
 
         // ✅ STEP 1: SKIP SWAGGER + AUTH PATHS FIRST
         if (
-                path.startsWith("/swagger-ui") ||
+                path.equals("/") ||
+                        path.equals("/error") ||
+                        path.startsWith("/swagger-ui") ||
                         path.startsWith("/v3/api-docs") ||
                         path.startsWith("/auth")
         ) {
@@ -60,7 +62,8 @@ public class JwtFilter extends OncePerRequestFilter {
             } catch (Exception e) {
 
                 response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                response.getWriter().write("Invalid JWT Token");
+                response.setContentType("application/json");
+                response.getWriter().write("{\"error\":\"Invalid JWT Token\"}");
                 return;
             }
         }
@@ -73,13 +76,16 @@ public class JwtFilter extends OncePerRequestFilter {
                     new UsernamePasswordAuthenticationToken(
                             username,
                             null,
-                            List.of(new SimpleGrantedAuthority("ROLE_" + role))
+                            List.of(new SimpleGrantedAuthority("ROLE_" + (role != null ? role : "USER")))
                     );
 
             SecurityContextHolder.getContext().setAuthentication(auth);
         }
 
         // STEP 4: CONTINUE FILTER CHAIN (ONLY ONCE)
-        filterChain.doFilter(request, response);
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            filterChain.doFilter(request, response);
+            return;
+        }
     }
     }
