@@ -1,17 +1,11 @@
 package com.example.demo;
 
-import jakarta.servlet.FilterChain;
-import jakarta.servlet.ServletException;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-
+import jakarta.servlet.*;
+import jakarta.servlet.http.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
-
 import org.springframework.security.core.context.SecurityContextHolder;
-
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -25,67 +19,49 @@ public class JwtFilter extends OncePerRequestFilter {
     private JwtService jwtService;
 
     @Override
-    protected void doFilterInternal(
-            HttpServletRequest request,
-            HttpServletResponse response,
-            FilterChain filterChain
-    ) throws ServletException, IOException {
+    protected void doFilterInternal(HttpServletRequest request,
+                                    HttpServletResponse response,
+                                    FilterChain filterChain)
+            throws ServletException, IOException {
 
         String path = request.getRequestURI();
 
-        // ✅ STEP 1: SKIP SWAGGER + AUTH PATHS FIRST
-        if (
-                path.equals("/") ||
-                        path.equals("/error") ||
-                        path.startsWith("/swagger-ui") ||
-                        path.startsWith("/v3/api-docs") ||
-                        path.startsWith("/auth")
-        ) {
+        if (path.startsWith("/auth") ||
+                path.startsWith("/swagger-ui") ||
+                path.startsWith("/v3/api-docs") ||
+                path.equals("/")) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        // STEP 2: JWT PROCESSING
         String authHeader = request.getHeader("Authorization");
 
-        String username = null;
-        String role = null;
-        String token = null;
-
-        if (authHeader != null && authHeader.startsWith("Bearer ")) {
-
-            token = authHeader.substring(7);
-
-            try {
-                username = jwtService.extractUsername(token);
-                role = jwtService.extractRole(token);
-            } catch (Exception e) {
-
-                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                response.setContentType("application/json");
-                response.getWriter().write("{\"error\":\"Invalid JWT Token\"}");
-                return;
-            }
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            filterChain.doFilter(request, response);
+            return;
         }
 
-        // STEP 3: SET AUTH CONTEXT
-        if (username != null &&
-                SecurityContextHolder.getContext().getAuthentication() == null) {
+        String token = authHeader.substring(7);
+
+        try {
+            String username = jwtService.extractUsername(token);
+            String role = jwtService.extractRole(token);
 
             UsernamePasswordAuthenticationToken auth =
                     new UsernamePasswordAuthenticationToken(
                             username,
                             null,
-                            List.of(new SimpleGrantedAuthority("ROLE_" + (role != null ? role : "USER")))
+                            List.of(new SimpleGrantedAuthority("ROLE_" + role))
                     );
 
             SecurityContextHolder.getContext().setAuthentication(auth);
-        }
 
-        // STEP 4: CONTINUE FILTER CHAIN (ONLY ONCE)
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            filterChain.doFilter(request, response);
+        } catch (Exception e) {
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.getWriter().write("Invalid Token");
             return;
         }
+
+        filterChain.doFilter(request, response);
     }
-    }
+}

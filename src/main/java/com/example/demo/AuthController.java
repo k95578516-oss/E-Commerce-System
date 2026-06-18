@@ -1,11 +1,10 @@
 package com.example.demo;
 
-import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/auth")
@@ -18,55 +17,38 @@ public class AuthController {
     private PasswordEncoder passwordEncoder;
 
     @Autowired
-    private AuthenticationManager authenticationManager;
-
-    @Autowired
     private JwtService jwtService;
 
-    @PostMapping("/register")
-    public String register(
-            @Valid @RequestBody RegisterRequest request) {
+    // SIGNUP
+    @PostMapping("/signup")
+    public String signup(@RequestBody User user) {
 
-        if (userRepository.findByName(request.getName()).isPresent()) {
-            throw new RuntimeException("Username already exists");
+        user.setPassword(passwordEncoder.encode(user.getPassword()));
+
+        if (user.getRole() == null) {
+            user.setRole("USER");
         }
-
-        User user = new User();
-
-        user.setName(request.getName());
-
-        user.setPassword(
-                passwordEncoder.encode(request.getPassword())
-        );
-
-        user.setRole(request.getRole().toUpperCase());
 
         userRepository.save(user);
 
-        return "User Registered Successfully";
+        return "User registered successfully";
     }
 
+    // LOGIN
     @PostMapping("/login")
-    public AuthResponse login(
-            @Valid @RequestBody LoginRequest request) {
+    public String login(@RequestBody User user) {
 
-        authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(
-                        request.getName(),
-                        request.getPassword()
-                )
-        );
+        Optional<User> dbUser = userRepository.findByName(user.getName());
 
-        User user = userRepository.findByName(request.getName())
-                .orElseThrow(() ->
-                        new RuntimeException("User not found"));
+        if (dbUser.isPresent() &&
+                passwordEncoder.matches(user.getPassword(), dbUser.get().getPassword())) {
 
-        String token =
-                jwtService.generateToken(
-                        user.getName(),
-                        user.getRole()
-                );
+            return jwtService.generateToken(
+                    dbUser.get().getName(),
+                    dbUser.get().getRole()
+            );
+        }
 
-        return new AuthResponse(token);
+        return "Invalid credentials";
     }
 }
