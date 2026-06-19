@@ -1,7 +1,9 @@
 package com.example.demo;
 
-import com.example.demo.Exception.ResourceNotFoundException;
-import org.springframework.beans.factory.annotation.Autowired;
+import com.example.demo.audit.AuditService;
+import com.example.demo.outbox.OutboxEvent;
+import com.example.demo.outbox.OutboxRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -12,26 +14,40 @@ import java.util.List;
 @Service
 public class OrderService {
 
-    @Autowired
-    private OrderRepository orderRepository;
+    private final OrderRepository orderRepository;
+    private final OrderItemRepository orderItemRepository;
+    private final CartRepository cartRepository;
+    private final CartItemRepository cartItemRepository;
+    private final ProductRepository productRepository;
+    private final AuditService auditService;
 
-    @Autowired
-    private OrderItemRepository orderItemRepository;
+    private final OutboxRepository outboxRepository;
+    private final ObjectMapper objectMapper;
 
-    @Autowired
-    private CartRepository cartRepository;
+    public OrderService(OrderRepository orderRepository,
+                        OrderItemRepository orderItemRepository,
+                        CartRepository cartRepository,
+                        CartItemRepository cartItemRepository,
+                        ProductRepository productRepository,
+                        OutboxRepository outboxRepository,
+                        ObjectMapper objectMapper, AuditService auditService) {
 
-    @Autowired
-    private CartItemRepository cartItemRepository;
+        this.orderRepository = orderRepository;
+        this.orderItemRepository = orderItemRepository;
+        this.cartRepository = cartRepository;
+        this.cartItemRepository = cartItemRepository;
+        this.productRepository = productRepository;
+        this.outboxRepository = outboxRepository;
+        this.objectMapper = objectMapper;
+        this.auditService = auditService;
+    }
 
-    @Autowired
-    private ProductRepository productRepository;
-
+    // ================= MAIN ORDER FLOW =================
     @Transactional
     public OrderDTO placeOrder(int userId) {
 
         Cart cart = cartRepository.findByUserId(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("Cart not found for user: " + userId));
+                .orElseThrow(() -> new RuntimeException("Cart not found"));
 
         List<CartItem> cartItems = cartItemRepository.findByCartId(cart.getId());
 
@@ -39,7 +55,6 @@ public class OrderService {
             throw new RuntimeException("Cart is empty");
         }
 
-        // Create Order
         Order order = new Order();
         order.setUser(cart.getUser());
         order.setOrderDate(LocalDate.now());
@@ -48,34 +63,37 @@ public class OrderService {
         List<OrderItem> orderItems = new ArrayList<>();
         double totalAmount = 0;
 
-        for (CartItem cartItem : cartItems) {
+        for (CartItem item : cartItems) {
 
-            Product product = cartItem.getProduct();
+            Product product = item.getProduct();
 
-            if(product.getStock() < cartItem.getQuantity()) {
-                throw new RuntimeException(
-                        product.getName() + " is out of stock"
-                );
+            if (product.getStock() < item.getQuantity()) {
+                throw new RuntimeException(product.getName() + " out of stock");
             }
 
-            product.setStock(
-                    product.getStock()
-                            - cartItem.getQuantity()
-            );
+            try {
 
-            productRepository.save(product);
+                product.setStock(
+                        product.getStock() - item.getQuantity()
+                );
 
+                productRepository.save(product);
+
+            } catch (Exception e) {
+
+                throw new RuntimeException(
+                        "Concurrent stock update detected. Retry order."
+                );
+            }
             OrderItem orderItem = new OrderItem();
             orderItem.setProduct(product);
-            orderItem.setQuantity(cartItem.getQuantity());
+            orderItem.setQuantity(item.getQuantity());
             orderItem.setPrice(product.getPrice());
             orderItem.setOrder(order);
 
-            totalAmount +=
-                    product.getPrice()
-                            * cartItem.getQuantity();
-
             orderItems.add(orderItem);
+
+            totalAmount += product.getPrice() * item.getQuantity();
         }
 
         order.setTotalAmount(totalAmount);
@@ -83,27 +101,57 @@ public class OrderService {
 
         Order savedOrder = orderRepository.save(order);
 
-        // clear cart after order
+        // save order items
+        for (OrderItem item : orderItems) {
+            item.setOrder(savedOrder);
+            orderItemRepository.save(item);
+        }
+
+        // clear cart
         cartItemRepository.deleteAll(cartItems);
+
+        // ================= OUTBOX EVENT (IMPORTANT FIX) =================
+        try {
+
+            OrderEvent event = new OrderEvent(
+                    savedOrder.getId(),
+                    savedOrder.getUser().getId(),
+
+                    savedOrder.getTotalAmount(),
+                    "ORDER_CREATED"
+            );
+
+            OutboxEvent outbox = new OutboxEvent();
+            outbox.setEventType("ORDER_CREATED");
+            outbox.setPayload(objectMapper.writeValueAsString(event));
+
+            outboxRepository.save(outbox);
+            auditService.log(
+                    "USER_" + userId,
+                    "ORDER_PLACED : " + savedOrder.getId()
+            );
+
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to create outbox event", e);
+        }
 
         return convertToDTO(savedOrder);
     }
 
-    // ================= GET ORDER BY ID =================
+    // ================= GET ORDER =================
     public OrderDTO getOrderById(int orderId) {
 
         Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
+                .orElseThrow(() -> new RuntimeException("Order not found"));
 
         return convertToDTO(order);
     }
 
-    // ================= GET ALL ORDERS OF USER =================
+    // ================= USER ORDERS =================
     public List<OrderDTO> getOrdersByUserId(int userId) {
 
-        List<Order> orders = orderRepository.findByUserId(userId);
-
-        return orders.stream()
+        return orderRepository.findByUserId(userId)
+                .stream()
                 .map(this::convertToDTO)
                 .toList();
     }
@@ -112,24 +160,27 @@ public class OrderService {
     public OrderDTO cancelOrder(int orderId) {
 
         Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
+                .orElseThrow(() -> new RuntimeException("Order not found"));
 
         if ("SHIPPED".equals(order.getStatus())) {
             throw new RuntimeException("Cannot cancel shipped order");
         }
 
         order.setStatus("CANCELLED");
+        Order saved = orderRepository.save(order);
 
-        Order updated = orderRepository.save(order);
+        auditService.log(
+                "USER_" + order.getUser().getId(),
+                "ORDER_CANCELLED : " + order.getId()
+        );
+        return convertToDTO(saved);
 
-        return convertToDTO(updated);
     }
 
-    // ================= MAPPER =================
+    // ================= DTO =================
     private OrderDTO convertToDTO(Order order) {
 
-        List<OrderItemDTO> items = orderItemRepository
-                .findByOrderId(order.getId())
+        List<OrderItemDTO> items = order.getItems()
                 .stream()
                 .map(this::convertItemToDTO)
                 .toList();

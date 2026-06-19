@@ -3,7 +3,16 @@ package com.example.demo;
 import jakarta.persistence.*;
 
 @Entity
-@Table(name = "users")
+@Table(
+        name = "users",
+        indexes = {
+                @Index(
+                        name = "idx_username",
+                        columnList = "name",
+                        unique = true
+                )
+        }
+)
 public class User {
 
     @Id

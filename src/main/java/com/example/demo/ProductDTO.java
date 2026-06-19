@@ -3,8 +3,10 @@ package com.example.demo;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
+import java.io.Serializable;
 
-public class ProductDTO {
+public class ProductDTO implements Serializable {
+
 
     private int id;
     @NotBlank(message = "Name can't be empty")

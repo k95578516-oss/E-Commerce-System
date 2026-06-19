@@ -1,7 +1,17 @@
 package com.example.demo;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Positive;
+
 @Entity
+@Table(
+        indexes = {
+                @Index(
+                        name = "idx_product_name",
+                        columnList = "name"
+                )
+        }
+)
 public class Product {
 
     @Id
@@ -12,12 +22,20 @@ public class Product {
 
     private String description;
 
+  @Positive
     private int stock;
 
+    @Positive
     private double price;
+
+    private boolean deleted = false;
+
     @ManyToOne
     @JoinColumn(name = "category_id")
     private Category category;
+    @Version
+    private Long version;
+
 
     public int getId() {
         return id;
@@ -59,5 +77,21 @@ public class Product {
 
     public void setCategory(Category category){
         this.category = category;
+    }
+
+    public Long getVersion() {
+        return version;
+    }
+
+    public void setVersion(Long version) {
+        this.version = version;
+    }
+
+    public boolean getDeleted(){
+        return deleted;
+    }
+
+    public void setDeleted(boolean deleted){
+        this.deleted = deleted;
     }
 }

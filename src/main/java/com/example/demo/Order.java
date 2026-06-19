@@ -1,19 +1,28 @@
 package com.example.demo;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Positive;
 
 import java.time.LocalDate;
 import java.util.List;
 
 
 @Entity
-@Table(name = "orders")
+@Table(
+        name = "orders",
+        indexes = {
+                @Index(
+                        name = "idx_user_order",
+                        columnList = "user_id"
+                )
+        }
+)
 public class Order {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private int id;
     private LocalDate orderDate;
-
+     @Positive
     private double totalAmount;
 
     private String status;

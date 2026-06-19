@@ -2,6 +2,7 @@ package com.example.demo.Exception;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -59,5 +60,13 @@ public class GlobalExceptionHandler {
                 "Something went wrong: " + ex.getMessage(),
                 HttpStatus.INTERNAL_SERVER_ERROR
         );
+    }
+
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<String> handleOptimisticLocking(
+            ObjectOptimisticLockingFailureException ex) {
+
+        return ResponseEntity.status(409)
+                .body("Product was modified by another transaction. Please try again.");
     }
 }
