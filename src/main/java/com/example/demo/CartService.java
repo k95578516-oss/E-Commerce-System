@@ -11,6 +11,8 @@ public class CartService {
 
     @Autowired
     private CartRepository cartRepository;
+    @Autowired
+    private UserRepository userRepository;
 
     @Autowired
     private CartItemRepository cartItemRepository;
@@ -31,7 +33,16 @@ public class CartService {
     public CartDTO addItemToCart(int userId, CartItemDTO dto) {
 
         Cart cart = cartRepository.findByUserId(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("Cart not found for user: " + userId));
+                .orElseGet(() -> {
+
+                    User user = userRepository.findById(userId)
+                            .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+                    Cart newCart = new Cart();
+                    newCart.setUser(user);
+
+                    return cartRepository.save(newCart);
+                });
 
         Product product = productRepository.findById(dto.getProductId())
                 .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
