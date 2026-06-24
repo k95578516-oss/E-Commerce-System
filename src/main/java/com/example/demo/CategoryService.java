@@ -2,7 +2,6 @@ package com.example.demo;
 
 import com.example.demo.Exception.ResourceNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -19,7 +18,7 @@ public class CategoryService {
 
         return category.stream().map(this::convertToDTO).toList();
     }
-    @Cacheable(value = "categories", key = "#id")
+
     public CategoryDTO getCategoryById(int id) {
 
         Category category = repo.findById(id)
@@ -42,10 +41,11 @@ public class CategoryService {
 
         Category category = repo.findById(id)
                 .orElseThrow(() ->
-                        new ResourceNotFoundException("Category not found with id: " + id));
+                        new ResourceNotFoundException(
+                                "Category not found with id: " + id));
 
         category.setName(dto.getName());
-
+        category.setDescription(dto.getDescription());
 
         Category updatedCategory = repo.save(category);
 

@@ -33,8 +33,9 @@ public class Product {
     @ManyToOne
     @JoinColumn(name = "category_id")
     private Category category;
+
     @Version
-    private Long version;
+    private Long version = 0L;
 
 
     public int getId() {

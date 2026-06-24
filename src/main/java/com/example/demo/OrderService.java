@@ -15,7 +15,6 @@ import java.util.List;
 public class OrderService {
 
     private final OrderRepository orderRepository;
-    private final OrderItemRepository orderItemRepository;
     private final CartRepository cartRepository;
     private final CartItemRepository cartItemRepository;
     private final ProductRepository productRepository;
@@ -25,7 +24,6 @@ public class OrderService {
     private final ObjectMapper objectMapper;
 
     public OrderService(OrderRepository orderRepository,
-                        OrderItemRepository orderItemRepository,
                         CartRepository cartRepository,
                         CartItemRepository cartItemRepository,
                         ProductRepository productRepository,
@@ -33,7 +31,6 @@ public class OrderService {
                         ObjectMapper objectMapper, AuditService auditService) {
 
         this.orderRepository = orderRepository;
-        this.orderItemRepository = orderItemRepository;
         this.cartRepository = cartRepository;
         this.cartItemRepository = cartItemRepository;
         this.productRepository = productRepository;
@@ -95,17 +92,14 @@ public class OrderService {
 
             totalAmount += product.getPrice() * item.getQuantity();
         }
-
+        for (OrderItem item : orderItems) {
+            item.setOrder(order);
+        }
         order.setTotalAmount(totalAmount);
         order.setItems(orderItems);
 
-        Order savedOrder = orderRepository.save(order);
+        Order savedOrder = orderRepository.saveAndFlush(order);
 
-        // save order items
-        for (OrderItem item : orderItems) {
-            item.setOrder(savedOrder);
-            orderItemRepository.save(item);
-        }
 
         // clear cart
         cartItemRepository.deleteAll(cartItems);
