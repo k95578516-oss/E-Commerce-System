@@ -1,7 +1,7 @@
 package com.example.demo;
 
 import jakarta.validation.Valid;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -10,8 +10,11 @@ import java.util.List;
 @RequestMapping("/products")
 public class ProductController {
 
-    @Autowired
-    private ProductService productService;
+    private final ProductService productService;
+
+    public ProductController(ProductService productService) {
+        this.productService = productService;
+    }
 
     @GetMapping
     public List<ProductDTO> getAll() {
@@ -24,12 +27,13 @@ public class ProductController {
     }
 
     @PostMapping
-    public ProductDTO create( @Valid @RequestBody ProductDTO dto) {
+    public ProductDTO create(@Valid @RequestBody ProductDTO dto) {
         return productService.saveProduct(dto);
     }
 
     @PutMapping("/{id}")
-    public ProductDTO update(@PathVariable int id, @RequestBody ProductDTO dto) {
+    public ProductDTO update(@PathVariable int id,
+                             @RequestBody ProductDTO dto) {
         return productService.updateProduct(id, dto);
     }
 
@@ -43,17 +47,18 @@ public class ProductController {
         return productService.getProductByCategory(categoryId);
     }
 
+    // ✅ FIXED PAGINATION (IMPORTANT)
     @GetMapping("/page")
-    public Object getPaged(@RequestParam int page,
-                           @RequestParam int size,
-                           @RequestParam String sortBy) {
+    public Page<ProductDTO> getPaged(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "id") String sortBy
+    ) {
         return productService.getProduct(page, size, sortBy);
     }
-    @GetMapping("/search")
-    public List<ProductDTO> searchProducts(
-            @RequestParam String keyword) {
 
+    @GetMapping("/search")
+    public List<ProductDTO> searchProducts(@RequestParam String keyword) {
         return productService.searchProducts(keyword);
     }
-
 }

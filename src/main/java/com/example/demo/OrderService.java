@@ -55,7 +55,7 @@ public class OrderService {
         Order order = new Order();
         order.setUser(cart.getUser());
         order.setOrderDate(LocalDate.now());
-        order.setStatus("PLACED");
+        order.setStatus(OrderStatus.PLACED);
 
         List<OrderItem> orderItems = new ArrayList<>();
         double totalAmount = 0;
@@ -151,24 +151,82 @@ public class OrderService {
     }
 
     // ================= CANCEL ORDER =================
+    @Transactional
     public OrderDTO cancelOrder(int orderId) {
 
         Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new RuntimeException("Order not found"));
+                .orElseThrow(() ->
+                        new RuntimeException("Order not found"));
 
-        if ("SHIPPED".equals(order.getStatus())) {
-            throw new RuntimeException("Cannot cancel shipped order");
+        if (order.getStatus() == OrderStatus.SHIPPED ||
+                order.getStatus() == OrderStatus.DELIVERED) {
+
+            throw new RuntimeException(
+                    "Cannot cancel shipped or delivered order");
         }
 
-        order.setStatus("CANCELLED");
-        Order saved = orderRepository.save(order);
+        if (order.getStatus() == OrderStatus.CANCELLED) {
+
+            throw new RuntimeException(
+                    "Order already cancelled");
+        }
+
+        for (OrderItem item : order.getItems()) {
+
+            Product product = item.getProduct();
+
+            product.setStock(
+                    product.getStock()
+                            + item.getQuantity()
+            );
+
+            productRepository.save(product);
+        }
+
+        order.setStatus(OrderStatus.CANCELLED);
+
+        Order savedOrder = orderRepository.save(order);
 
         auditService.log(
-                "USER_" + order.getUser().getId(),
-                "ORDER_CANCELLED : " + order.getId()
+                "ADMIN",
+                "ORDER_CANCELLED : "
+                        + orderId
         );
-        return convertToDTO(saved);
 
+        return convertToDTO(savedOrder);
+    }
+    @Transactional
+    public OrderDTO updateStatus(
+            Integer orderId,
+            OrderStatus newStatus) {
+
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() ->
+                        new RuntimeException("Order not found"));
+
+        OrderStatus currentStatus = order.getStatus();
+
+        if (!isValidTransition(currentStatus, newStatus)) {
+            throw new RuntimeException(
+                    "Invalid status transition from "
+                            + currentStatus
+                            + " to "
+                            + newStatus);
+        }
+
+        order.setStatus(newStatus);
+
+        Order savedOrder = orderRepository.save(order);
+
+        auditService.log(
+                "ADMIN",
+                "ORDER_STATUS_UPDATED : "
+                        + orderId
+                        + " -> "
+                        + newStatus
+        );
+
+        return convertToDTO(savedOrder);
     }
 
     // ================= DTO =================
@@ -184,7 +242,7 @@ public class OrderService {
         dto.setUserId(order.getUser().getId());
         dto.setOrderDate(order.getOrderDate());
         dto.setTotalAmount(order.getTotalAmount());
-        dto.setStatus(order.getStatus());
+        dto.setStatus(order.getStatus().name());
         dto.setItems(items);
 
         return dto;
@@ -199,5 +257,32 @@ public class OrderService {
         dto.setPrice(item.getPrice());
 
         return dto;
+    }
+    private boolean isValidTransition(
+            OrderStatus current,
+            OrderStatus next) {
+
+        switch(current) {
+
+            case PLACED:
+                return next == OrderStatus.PROCESSING
+                        || next == OrderStatus.CANCELLED;
+
+            case PROCESSING:
+                return next == OrderStatus.SHIPPED
+                        || next == OrderStatus.CANCELLED;
+
+            case SHIPPED:
+                return next == OrderStatus.DELIVERED;
+
+            case DELIVERED:
+                return false;
+
+            case CANCELLED:
+                return false;
+
+            default:
+                return false;
+        }
     }
 }

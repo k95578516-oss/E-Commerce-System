@@ -35,4 +35,12 @@ public class OrderController {
     public OrderDTO cancelOrder(@PathVariable int orderId) {
         return orderService.cancelOrder(orderId);
     }
+
+    @PutMapping("/{orderId}/status")
+    public OrderDTO updateStatus(
+            @PathVariable Integer orderId,
+            @RequestParam OrderStatus status) {
+
+        return orderService.updateStatus(orderId, status);
+    }
 }

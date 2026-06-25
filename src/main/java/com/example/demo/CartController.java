@@ -1,14 +1,17 @@
 package com.example.demo;
 
-import org.springframework.beans.factory.annotation.Autowired;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/cart")
 public class CartController {
 
-    @Autowired
-    private CartService cartService;
+    private final CartService cartService;
+
+    public CartController(CartService cartService) {
+        this.cartService = cartService;
+    }
 
     @GetMapping("/{userId}")
     public CartDTO getCart(@PathVariable int userId) {
@@ -17,7 +20,7 @@ public class CartController {
 
     @PostMapping("/{userId}/items")
     public CartDTO addItem(@PathVariable int userId,
-                           @RequestBody CartItemDTO dto) {
+                           @Valid @RequestBody CartItemDTO dto) {
         return cartService.addItemToCart(userId, dto);
     }
 

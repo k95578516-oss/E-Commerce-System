@@ -15,58 +15,40 @@ public class ProductService {
     private final CategoryRepository categoryRepository;
     private final AuditService auditService;
 
-
     public ProductService(ProductRepository productRepository,
-                          CategoryRepository categoryRepository,  AuditService auditService) {
-
+                          CategoryRepository categoryRepository,
+                          AuditService auditService) {
         this.productRepository = productRepository;
         this.categoryRepository = categoryRepository;
         this.auditService = auditService;
     }
 
-    // ================= GET ALL PRODUCTS =================
-
+    // ================= GET ALL =================
     @Cacheable("allProducts")
     public List<ProductDTO> getAllProducts() {
-
         return productRepository.findByDeletedFalse()
                 .stream()
                 .map(this::convertToDTO)
                 .toList();
     }
 
-    // ================= GET PRODUCT BY ID =================
-
+    // ================= GET BY ID =================
     @Cacheable(value = "products", key = "#id")
     public ProductDTO getProductById(int id) {
-
-        Product product =
-                productRepository
-                        .findByIdAndDeletedFalse(id)
-                        .orElseThrow(() ->
-                                new RuntimeException("Product not found"));
+        Product product = productRepository.findByIdAndDeletedFalse(id)
+                .orElseThrow(() -> new RuntimeException("Product not found"));
 
         return convertToDTO(product);
     }
 
-    // ================= CREATE PRODUCT =================
-
-    @CacheEvict(
-            value = {
-                    "products",
-                    "allProducts",
-                    "productsByCategory"
-            },
-            allEntries = true
-    )
+    // ================= CREATE =================
+    @CacheEvict(value = {"products", "allProducts", "productsByCategory"}, allEntries = true)
     public ProductDTO saveProduct(ProductDTO dto) {
 
         Category category = categoryRepository.findById(dto.getCategoryId())
-                .orElseThrow(() ->
-                        new RuntimeException("Category not found"));
+                .orElseThrow(() -> new RuntimeException("Category not found"));
 
         Product product = new Product();
-
         product.setName(dto.getName());
         product.setDescription(dto.getDescription());
         product.setPrice(dto.getPrice());
@@ -74,33 +56,18 @@ public class ProductService {
         product.setCategory(category);
 
         Product saved = productRepository.save(product);
-        auditService.log(
-                "ADMIN",
-                "PRODUCT_CREATED : " + saved.getId()
-        );
+
+        auditService.log("ADMIN", "PRODUCT_CREATED : " + saved.getId());
 
         return convertToDTO(saved);
     }
 
-    // ================= UPDATE PRODUCT =================
+    // ================= UPDATE =================
+    @CacheEvict(value = {"products", "allProducts", "productsByCategory"}, allEntries = true)
+    public ProductDTO updateProduct(int id, ProductDTO dto) {
 
-    @CacheEvict(
-            value = {
-                    "products",
-                    "allProducts",
-                    "productsByCategory"
-            },
-            allEntries = true
-    )
-    public ProductDTO updateProduct(
-            int id,
-            ProductDTO dto) {
-
-        Product product =
-                productRepository
-                        .findByIdAndDeletedFalse(id)
-                        .orElseThrow(() ->
-                                new RuntimeException("Product not found"));
+        Product product = productRepository.findByIdAndDeletedFalse(id)
+                .orElseThrow(() -> new RuntimeException("Product not found"));
 
         product.setName(dto.getName());
         product.setDescription(dto.getDescription());
@@ -108,111 +75,69 @@ public class ProductService {
         product.setStock(dto.getStock());
 
         if (dto.getCategoryId() > 0) {
-
-            Category category =
-                    categoryRepository.findById(
-                            dto.getCategoryId()
-                    ).orElseThrow(() ->
-                            new RuntimeException(
-                                    "Category not found"));
-
+            Category category = categoryRepository.findById(dto.getCategoryId())
+                    .orElseThrow(() -> new RuntimeException("Category not found"));
             product.setCategory(category);
         }
 
-        Product updated =
-                productRepository.save(product);
+        Product updated = productRepository.save(product);
 
-        auditService.log(
-                "ADMIN",
-                "PRODUCT_UPDATED : " + updated.getId()
-        );
+        auditService.log("ADMIN", "PRODUCT_UPDATED : " + updated.getId());
 
         return convertToDTO(updated);
     }
-    // ================= DELETE PRODUCT =================
 
-    @CacheEvict(
-            value = {
-                    "products",
-                    "allProducts",
-                    "productsByCategory"
-            },
-            allEntries = true
-    )
+    // ================= DELETE (SOFT DELETE) =================
+    @CacheEvict(value = {"products", "allProducts", "productsByCategory"}, allEntries = true)
     public void deleteProduct(int id) {
 
-        Product product =
-                productRepository
-                        .findByIdAndDeletedFalse(id)
-                        .orElseThrow(() ->
-                                new RuntimeException("Product not found"));
+        Product product = productRepository.findByIdAndDeletedFalse(id)
+                .orElseThrow(() -> new RuntimeException("Product not found"));
 
         product.setDeleted(true);
-
         productRepository.save(product);
 
-        auditService.log(
-                "ADMIN",
-                "PRODUCT_DELETED : " + product.getId()
-        );
+        auditService.log("ADMIN", "PRODUCT_DELETED : " + product.getId());
     }
 
-    // ================= GET PRODUCTS BY CATEGORY =================
+    // ================= CATEGORY =================
+    @Cacheable(value = "productsByCategory", key = "#categoryId")
+    public List<ProductDTO> getProductByCategory(int categoryId) {
 
-    @Cacheable(
-            value = "productsByCategory",
-            key = "#categoryId"
-    )
-    public List<ProductDTO> getProductByCategory(
-            int categoryId) {
-
-        return productRepository
-                .findByCategoryIdAndDeletedFalse(categoryId)
+        return productRepository.findByCategoryIdAndDeletedFalse(categoryId)
                 .stream()
                 .map(this::convertToDTO)
                 .toList();
     }
 
     // ================= SEARCH =================
-
-    public List<ProductDTO> searchProducts(
-            String keyword) {
+    public List<ProductDTO> searchProducts(String keyword) {
 
         return productRepository
-                .findByNameContainingIgnoreCaseAndDeletedFalse(
-                        keyword
-                )
+                .findByNameContainingIgnoreCaseAndDeletedFalse(keyword)
                 .stream()
                 .map(this::convertToDTO)
                 .toList();
     }
 
-    // ================= PAGINATION =================
+    // ================= PAGINATION FIX =================
+    public Page<ProductDTO> getProduct(int page, int size, String sortBy) {
 
-    public Page<ProductDTO> getProduct(
-            int page,
-            int size,
-            String sortBy) {
+        Pageable pageable = PageRequest.of(
+                page,
+                size,
+                Sort.by(sortBy)
+        );
 
-        Pageable pageable =
-                PageRequest.of(
-                        page,
-                        size,
-                        Sort.by(sortBy)
-                );
-
-        Page<Product> productPage =
-                productRepository.findByDeletedFalse(pageable);
+        Page<Product> productPage = productRepository.findByDeletedFalse(pageable);
 
         return productPage.map(this::convertToDTO);
     }
 
-    // ================= DTO MAPPER =================
-
+    // ================= MAPPER =================
     private ProductDTO convertToDTO(Product product) {
 
         ProductDTO dto = new ProductDTO();
-
         dto.setId(product.getId());
         dto.setName(product.getName());
         dto.setDescription(product.getDescription());

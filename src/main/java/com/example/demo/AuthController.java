@@ -1,27 +1,31 @@
 package com.example.demo;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.Optional;
 
 @RestController
 @RequestMapping("/auth")
 public class AuthController {
 
-    @Autowired
-    private UserRepository userRepository;
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final JwtService jwtService;
 
-    @Autowired
-    private PasswordEncoder passwordEncoder;
-
-    @Autowired
-    private JwtService jwtService;
+    public AuthController(UserRepository userRepository,
+                          PasswordEncoder passwordEncoder,
+                          JwtService jwtService) {
+        this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
+        this.jwtService = jwtService;
+    }
 
     // SIGNUP
     @PostMapping("/signup")
     public String signup(@RequestBody User user) {
+
+        if (userRepository.findByName(user.getName()).isPresent()) {
+            return "Username already exists";
+        }
 
         user.setPassword(passwordEncoder.encode(user.getPassword()));
 
@@ -34,21 +38,24 @@ public class AuthController {
         return "User registered successfully";
     }
 
-    // LOGIN
+    // LOGIN (FIXED)
     @PostMapping("/login")
-    public String login(@RequestBody User user) {
+    public String login(@RequestBody LoginRequest request) {
 
-        Optional<User> dbUser = userRepository.findByName(user.getName());
+        User dbUser = userRepository.findByName(request.getName())
+                .orElse(null);
 
-        if (dbUser.isPresent() &&
-                passwordEncoder.matches(user.getPassword(), dbUser.get().getPassword())) {
-
-            return jwtService.generateToken(
-                    dbUser.get().getName(),
-                    dbUser.get().getRole()
-            );
+        if (dbUser == null) {
+            return "Invalid credentials";
         }
 
-        return "Invalid credentials";
+        if (!passwordEncoder.matches(request.getPassword(), dbUser.getPassword())) {
+            return "Invalid credentials";
+        }
+
+        return jwtService.generateToken(
+                dbUser.getName(),
+                dbUser.getRole()
+        );
     }
 }

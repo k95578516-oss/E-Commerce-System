@@ -1,7 +1,6 @@
 package com.example.demo;
 
 import jakarta.validation.Valid;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -10,8 +9,11 @@ import java.util.List;
 @RequestMapping("/categories")
 public class CategoryController {
 
-    @Autowired
-    private CategoryService categoryService;
+    private final CategoryService categoryService;
+
+    public CategoryController(CategoryService categoryService) {
+        this.categoryService = categoryService;
+    }
 
     @GetMapping
     public List<CategoryDTO> getAll() {
@@ -24,12 +26,13 @@ public class CategoryController {
     }
 
     @PostMapping
-    public CategoryDTO create( @Valid @RequestBody CategoryDTO dto) {
+    public CategoryDTO create(@Valid @RequestBody CategoryDTO dto) {
         return categoryService.saveCategory(dto);
     }
 
     @PutMapping("/{id}")
-    public CategoryDTO update(@PathVariable int id, @Valid @RequestBody CategoryDTO dto) {
+    public CategoryDTO update(@PathVariable int id,
+                              @Valid @RequestBody CategoryDTO dto) {
         return categoryService.updateCategory(id, dto);
     }
 

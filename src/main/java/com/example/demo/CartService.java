@@ -1,121 +1,128 @@
 package com.example.demo;
 
 import com.example.demo.Exception.ResourceNotFoundException;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
 @Service
+@Transactional
 public class CartService {
 
-    @Autowired
-    private CartRepository cartRepository;
-    @Autowired
-    private UserRepository userRepository;
+    private final CartRepository cartRepository;
+    private final UserRepository userRepository;
+    private final CartItemRepository cartItemRepository;
+    private final ProductRepository productRepository;
 
-    @Autowired
-    private CartItemRepository cartItemRepository;
+    public CartService(CartRepository cartRepository,
+                       UserRepository userRepository,
+                       CartItemRepository cartItemRepository,
+                       ProductRepository productRepository) {
+        this.cartRepository = cartRepository;
+        this.userRepository = userRepository;
+        this.cartItemRepository = cartItemRepository;
+        this.productRepository = productRepository;
+    }
 
-    @Autowired
-    private ProductRepository productRepository;
-
-    // GET CART BY USER ID (main entry point)
+    // ================= GET CART =================
     public CartDTO getCartByUserId(int userId) {
 
         Cart cart = cartRepository.findByUserId(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("Cart not found for user: " + userId));
+                .orElseThrow(() -> new ResourceNotFoundException("Cart not found"));
 
         return convertToDTO(cart);
     }
 
-    // ADD ITEM TO CART
+    // ================= ADD ITEM =================
     public CartDTO addItemToCart(int userId, CartItemDTO dto) {
 
         Cart cart = cartRepository.findByUserId(userId)
                 .orElseGet(() -> {
-
                     User user = userRepository.findById(userId)
                             .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
                     Cart newCart = new Cart();
                     newCart.setUser(user);
 
-                    return cartRepository.save(newCart);
+                    return cartRepository.save(newCart); // ✅ FIX: must save first
                 });
 
         Product product = productRepository.findById(dto.getProductId())
                 .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
 
-        // check if item already exists in cart
-        CartItem existingItem = cartItemRepository
+        CartItem item = cartItemRepository
                 .findByCartIdAndProductId(cart.getId(), product.getId())
                 .orElse(null);
 
-        if (existingItem != null) {
-            existingItem.setQuantity(existingItem.getQuantity() + dto.getQuantity());
-            cartItemRepository.save(existingItem);
+        if (item != null) {
+            item.setQuantity(item.getQuantity() + dto.getQuantity());
         } else {
-            CartItem item = new CartItem();
+            item = new CartItem();
             item.setCart(cart);
             item.setProduct(product);
             item.setQuantity(dto.getQuantity());
-
-            cartItemRepository.save(item);
         }
 
-        return convertToDTO(cart);
+        cartItemRepository.save(item);
+
+        return convertToDTO(getFreshCart(cart.getId())); // ✅ FIX
     }
 
-    // UPDATE ITEM QUANTITY
+    // ================= UPDATE ITEM =================
     public CartDTO updateCartItem(int userId, int productId, int quantity) {
 
         Cart cart = cartRepository.findByUserId(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("Cart not found for user: " + userId));
+                .orElseThrow(() -> new ResourceNotFoundException("Cart not found"));
 
         CartItem item = cartItemRepository
                 .findByCartIdAndProductId(cart.getId(), productId)
-                .orElseThrow(() -> new ResourceNotFoundException("Item not found in cart"));
+                .orElseThrow(() -> new ResourceNotFoundException("Item not found"));
 
         item.setQuantity(quantity);
         cartItemRepository.save(item);
 
-        return convertToDTO(cart);
+        return convertToDTO(getFreshCart(cart.getId())); // ✅ FIX
     }
 
-    // REMOVE ITEM FROM CART
+    // ================= REMOVE ITEM =================
     public CartDTO removeItem(int userId, int productId) {
 
         Cart cart = cartRepository.findByUserId(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("Cart not found for user: " + userId));
+                .orElseThrow(() -> new ResourceNotFoundException("Cart not found"));
 
         CartItem item = cartItemRepository
                 .findByCartIdAndProductId(cart.getId(), productId)
-                .orElseThrow(() -> new ResourceNotFoundException("Item not found in cart"));
+                .orElseThrow(() -> new ResourceNotFoundException("Item not found"));
 
         cartItemRepository.delete(item);
 
-        return convertToDTO(cart);
+        return convertToDTO(getFreshCart(cart.getId())); // ✅ FIX
     }
 
-    // CLEAR CART
+    // ================= CLEAR CART =================
     public void clearCart(int userId) {
 
         Cart cart = cartRepository.findByUserId(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("Cart not found for user: " + userId));
+                .orElseThrow(() -> new ResourceNotFoundException("Cart not found"));
 
-        List<CartItem> items = cartItemRepository.findByCartId(cart.getId());
-        cartItemRepository.deleteAll(items);
+        cartItemRepository.deleteAll(
+                cartItemRepository.findByCartId(cart.getId())
+        );
     }
 
-    // ===================== MAPPER =====================
+    // ================= SAFE REFRESH =================
+    private Cart getFreshCart(int cartId) {
+        return cartRepository.findById(cartId)
+                .orElseThrow(() -> new ResourceNotFoundException("Cart not found"));
+    }
 
+    // ================= MAPPER =================
     private CartDTO convertToDTO(Cart cart) {
 
-        List<CartItemDTO> items = cartItemRepository
-                .findByCartId(cart.getId())
+        List<CartItemDTO> items = cartItemRepository.findByCartId(cart.getId())
                 .stream()
-                .map(this::convertItemToDTO)
+                .map(this::mapItem)
                 .toList();
 
         CartDTO dto = new CartDTO();
@@ -126,15 +133,14 @@ public class CartService {
         return dto;
     }
 
-    private CartItemDTO convertItemToDTO(CartItem item) {
+    private CartItemDTO mapItem(CartItem item) {
 
-        CartItemDTO dto = new CartItemDTO();
-        dto.setId(item.getId());
-        dto.setProductId(item.getProduct().getId());
-        dto.setProductName(item.getProduct().getName());
-        dto.setPrice(item.getProduct().getPrice());
-        dto.setQuantity(item.getQuantity());
-
-        return dto;
+        return new CartItemDTO(
+                item.getId(),
+                item.getProduct().getId(),
+                item.getProduct().getName(),
+                item.getProduct().getPrice(),
+                item.getQuantity()
+        );
     }
 }

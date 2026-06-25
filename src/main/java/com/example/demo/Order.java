@@ -25,7 +25,8 @@ public class Order {
 
     private double totalAmount;
 
-    private String status;
+    @Enumerated(EnumType.STRING)
+    private OrderStatus status;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
@@ -60,10 +61,10 @@ public class Order {
     public void setTotalAmount(double totalAmount){
         this.totalAmount = totalAmount;
     }
-    public String getStatus(){
+    public OrderStatus getStatus(){
         return status;
     }
-    public void setStatus(String status){
+    public void setStatus(OrderStatus status){
         this.status = status;
     }
 
@@ -79,9 +80,5 @@ public class Order {
     public void setUser(User user){
         this.user = user;
     }
-
-
-
-
 
 }
