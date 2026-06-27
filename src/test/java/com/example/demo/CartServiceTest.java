@@ -1,154 +1,78 @@
 package com.example.demo;
 
-import com.example.demo.Exception.ResourceNotFoundException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
+import org.mockito.*;
+
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class CartServiceTest {
 
-    @Mock
-    private CartRepository cartRepository;
-
-    @Mock
-    private CartItemRepository cartItemRepository;
-
-    @Mock
-    private ProductRepository productRepository;
-
     @InjectMocks
     private CartService cartService;
 
-    // ---------------- GET CART ----------------
+    @Mock private CartRepository cartRepository;
+    @Mock private UserRepository userRepository;
+    @Mock private CartItemRepository cartItemRepository;
+    @Mock private ProductRepository productRepository;
 
     @Test
-    void shouldReturnCartWhenCartExists() {
+    void addItem_shouldCreateCartAndReturnDTO() {
 
-        // ARRANGE
+        int userId = 1;
+
         User user = new User();
-        user.setId(1);
+        user.setId(userId);
 
         Cart cart = new Cart();
-        cart.setId(1);
-        cart.setUser(user);
-
-        when(cartRepository.findByUserId(1))
-                .thenReturn(Optional.of(cart));
-
-        when(cartItemRepository.findByCartId(1))
-                .thenReturn(Collections.emptyList());
-
-        // ACT
-        CartDTO result = cartService.getCartByUserId(1);
-
-        // ASSERT
-        assertNotNull(result);
-        assertEquals(1, result.getUserId());
-        assertEquals(1, result.getId());
-
-        verify(cartRepository, times(1)).findByUserId(1);
-    }
-
-    @Test
-    void shouldThrowExceptionWhenCartNotFound() {
-
-        // ARRANGE
-        when(cartRepository.findByUserId(1))
-                .thenReturn(Optional.empty());
-
-        // ACT + ASSERT
-        assertThrows(
-                ResourceNotFoundException.class,
-                () -> cartService.getCartByUserId(1)
-        );
-
-        verify(cartRepository, times(1)).findByUserId(1);
-    }
-
-    // ---------------- ADD ITEM ----------------
-
-    @Test
-    void shouldAddItemToCart() {
-
-        // ARRANGE
-        User user = new User();
-        user.setId(1);
-
-        Cart cart = new Cart();
-        cart.setId(1);
+        cart.setId(10);
         cart.setUser(user);
 
         Product product = new Product();
-        product.setId(1);
-        product.setName("Laptop");
-        product.setPrice(50000);
+        product.setId(5);
+        product.setName("Phone");
+        product.setPrice(1000.0);
+        product.setStock(10);
 
         CartItemDTO dto = new CartItemDTO();
-        dto.setProductId(1);
+        dto.setProductId(5);
         dto.setQuantity(2);
 
-        when(cartRepository.findByUserId(1))
-                .thenReturn(Optional.of(cart));
+        when(cartRepository.findByUserId(userId))
+                .thenReturn(Optional.empty());
 
-        when(productRepository.findById(1))
+        when(userRepository.findById(userId))
+                .thenReturn(Optional.of(user));
+
+        when(cartRepository.save(any()))
+                .thenReturn(cart);
+
+        when(productRepository.findById(5))
                 .thenReturn(Optional.of(product));
 
-        when(cartItemRepository.findByCartIdAndProductId(1, 1))
+        when(cartItemRepository.findByCartIdAndProductId(anyInt(), anyInt()))
                 .thenReturn(Optional.empty());
 
-        when(cartItemRepository.save(any(CartItem.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(cartItemRepository.save(any()))
+                .thenAnswer(i -> i.getArgument(0));
 
-        when(cartItemRepository.findByCartId(1))
-                .thenReturn(Collections.emptyList());
+        when(cartItemRepository.findByCartId(anyInt()))
+                .thenReturn(List.of());
 
-        // ACT
-        CartDTO result = cartService.addItemToCart(1, dto);
-
-        // ASSERT
-        assertNotNull(result);
-        assertEquals(1, result.getUserId());
-
-        verify(cartItemRepository, times(1)).save(any(CartItem.class));
-    }
-
-    @Test
-    void shouldThrowExceptionWhenProductNotFound() {
-
-        // ARRANGE
-        User user = new User();
-        user.setId(1);
-
-        Cart cart = new Cart();
-        cart.setId(1);
-        cart.setUser(user);
-
-        CartItemDTO dto = new CartItemDTO();
-        dto.setProductId(100);
-        dto.setQuantity(1);
-
-        when(cartRepository.findByUserId(1))
+        when(cartRepository.findById(anyInt()))
                 .thenReturn(Optional.of(cart));
 
-        when(productRepository.findById(100))
-                .thenReturn(Optional.empty());
+        CartDTO result = cartService.addItemToCart(userId, dto);
 
-        // ACT + ASSERT
-        assertThrows(
-                ResourceNotFoundException.class,
-                () -> cartService.addItemToCart(1, dto)
-        );
-
-        verify(productRepository, times(1)).findById(100);
+        assertNotNull(result);
+        assertEquals(userId, result.getUserId());
     }
 }

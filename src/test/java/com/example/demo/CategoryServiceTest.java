@@ -1,74 +1,55 @@
 package com.example.demo;
-import com.example.demo.Exception.ResourceNotFoundException;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.*;
 
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
-
-import static org.mockito.Mockito.when;
-
+import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
-public class CategoryServiceTest {
-    @Mock
-    private ProductRepository productRepository;
-
-    @Mock
-    private CartRepository cartRepository;
-    @Mock
-    private CartItemRepository cartItemRepository;
+class CategoryServiceTest {
 
     @InjectMocks
-    private CartService cartService;
+    private CategoryService categoryService;
+
+    @Mock private CategoryRepository repo;
 
     @Test
-    void shouldAddItemToCart() {
+    void shouldSaveCategory() {
 
-        User user = new User();
-        user.setId(1);
+        CategoryDTO dto = new CategoryDTO();
+        dto.setName("Electronics");
 
-        Cart cart = new Cart();
-        cart.setId(1);
-        cart.setUser(user);
+        Category category = new Category();
+        category.setId(1);
+        category.setName("Electronics");
 
-        Product product = new Product();
-        product.setId(1);
-        product.setName("Laptop");
+        when(repo.save(any(Category.class)))
+                .thenReturn(category);
 
-        CartItemDTO dto = new CartItemDTO();
-        dto.setProductId(1);
-        dto.setQuantity(2);
-
-        when(cartRepository.findByUserId(1))
-                .thenReturn(Optional.of(cart));
-
-        when(productRepository.findById(1))
-                .thenReturn(Optional.of(product));
-
-        when(cartItemRepository.findByCartIdAndProductId(1,1))
-                .thenReturn(Optional.empty());
-
-        CartDTO result =
-                cartService.addItemToCart(1,dto);
+        CategoryDTO result = categoryService.saveCategory(dto);
 
         assertNotNull(result);
+        assertEquals("Electronics", result.getName());
     }
+
     @Test
-    void shouldThrowExceptionWhenCartNotFound() {
+    void shouldGetCategoryById() {
 
-        CartItemDTO dto = new CartItemDTO();
+        Category category = new Category();
+        category.setId(1);
+        category.setName("Test");
 
-        when(cartRepository.findByUserId(1))
-                .thenReturn(Optional.empty());
+        when(repo.findById(1))
+                .thenReturn(Optional.of(category));
 
-        assertThrows(
-                ResourceNotFoundException.class,
-                () -> cartService.addItemToCart(1,dto)
-        );
+        CategoryDTO result = categoryService.getCategoryById(1);
+
+        assertNotNull(result);
+        assertEquals("Test", result.getName());
     }
 }
